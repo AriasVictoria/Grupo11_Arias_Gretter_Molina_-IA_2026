@@ -35,10 +35,10 @@ class RoverProblem(SearchProblem):
         filas = [f for f, _ in todas]
         columnas = [c for _, c in todas]
 
-        self.min_fila = min(filas) - 1
-        self.max_fila = max(filas) + 1
-        self.min_col = min(columnas) - 1
-        self.max_col = max(columnas) + 1
+        self.min_fila = min(filas) - 2
+        self.max_fila = max(filas) + 2
+        self.min_col = min(columnas) - 2
+        self.max_col = max(columnas) + 2
 
     def is_goal(self, state):
         _, _, _, carga, igneas, sed = state
@@ -61,24 +61,39 @@ class RoverProblem(SearchProblem):
 
         if pendientes:
 
-            objetivo = min(
-                pendientes,
-                key=lambda p: abs(r - p[0]) + abs(c - p[1])
-            )
+            objetivo_fila = sum(f for f, _ in pendientes) / len(pendientes)
+            objetivo_col = sum(c2 for _, c2 in pendientes) / len(pendientes)
 
-            objetivo_r, objetivo_c = objetivo
+            posibles = [
+                (r + 1, c),
+                (r - 1, c),
+                (r, c + 1),
+                (r, c - 1),
+            ]
 
-            if objetivo_r > r:
-                movimientos.append((r + 1, c))
+            for nr, nc in posibles:
 
-            elif objetivo_r < r:
-                movimientos.append((r - 1, c))
+                distancia_actual = (
+                    abs(r - objetivo_fila)
+                    + abs(c - objetivo_col)
+                )
 
-            if objetivo_c > c:
-                movimientos.append((r, c + 1))
+                nueva_distancia = (
+                    abs(nr - objetivo_fila)
+                    + abs(nc - objetivo_col)
+                )
 
-            elif objetivo_c < c:
-                movimientos.append((r, c - 1))
+                if nueva_distancia <= distancia_actual:
+                    movimientos.append((nr, nc))
+
+        else:
+
+            movimientos = [
+                (r + 1, c),
+                (r - 1, c),
+                (r, c + 1),
+                (r, c - 1),
+            ]
 
         for destino in movimientos:
 
@@ -97,26 +112,32 @@ class RoverProblem(SearchProblem):
 
         movimientos_overdrive = []
 
-        if pendientes:
+        posibles_overdrive = [
+            (r + 2, c),
+            (r - 2, c),
+            (r, c + 2),
+            (r, c - 2),
+        ]
 
-            objetivo = min(
-                pendientes,
-                key=lambda p: abs(r - p[0]) + abs(c - p[1])
-            )
+        for nr, nc in posibles_overdrive:
 
-            objetivo_r, objetivo_c = objetivo
+            if pendientes:
 
-            if objetivo_r - r >= 2:
-                movimientos_overdrive.append((r + 2, c))
+                distancia_actual = (
+                    abs(r - objetivo_fila)
+                    + abs(c - objetivo_col)
+                )
 
-            elif r - objetivo_r >= 2:
-                movimientos_overdrive.append((r - 2, c))
+                nueva_distancia = (
+                    abs(nr - objetivo_fila)
+                    + abs(nc - objetivo_col)
+                )
 
-            if objetivo_c - c >= 2:
-                movimientos_overdrive.append((r, c + 2))
+                if nueva_distancia <= distancia_actual:
+                    movimientos_overdrive.append((nr, nc))
 
-            elif c - objetivo_c >= 2:
-                movimientos_overdrive.append((r, c - 2))
+            else:
+                movimientos_overdrive.append((nr, nc))
 
         for destino in movimientos_overdrive:
 
@@ -176,7 +197,7 @@ class RoverProblem(SearchProblem):
 
         if (
             (r, c) not in self.zonas_sombra
-            and bateria <= 10
+            and bateria < 20
         ):
             acciones.append(("recargar", None))
 
