@@ -1,370 +1,125 @@
-from simpleai.search import SearchProblem, astar
-
-
-class RoverProblem(SearchProblem):
-
-    def __init__(
-        self,
-        rover_inicio,
-        bateria_inicial,
-        zonas_sombra,
-        muestras_igneas,
-        muestras_sedimentarias,
-    ):
-
-        self.zonas_sombra = set(zonas_sombra)
-
-        initial_state = (
-            rover_inicio,                    # posición
-            bateria_inicial,                # batería
-            None,                           # taladro equipado
-            0,                              # carga
-            tuple(muestras_igneas),         # ígneas restantes
-            tuple(muestras_sedimentarias),  # sedimentarias restantes
-        )
-        super().__init__(initial_state)
-
-        # límites del mapa para evitar expansión infinita
-        todas = (
-            [rover_inicio]
-            + list(muestras_igneas)
-            + list(muestras_sedimentarias)
-            + list(zonas_sombra)
-        )
-
-        filas = [f for f, _ in todas]
-        columnas = [c for _, c in todas]
-
-        self.min_fila = min(filas) - 2
-        self.max_fila = max(filas) + 2
-        self.min_col = min(columnas) - 2
-        self.max_col = max(columnas) + 2
-
-    def is_goal(self, state):
-        _, _, _, carga, igneas, sed = state
-
-        return not igneas and not sed and carga == 0
-
-    def actions(self, state):
-
-        (r, c), bateria, taladro, carga, igneas, sed = state
-
-        acciones = []
-
-        # =========================
-        # MOVERSE
-        # =========================
-
-        movimientos = []
-
-        pendientes = list(igneas) + list(sed)
-
-        if pendientes:
-
-            objetivo_fila = sum(f for f, _ in pendientes) / len(pendientes)
-            objetivo_col = sum(c2 for _, c2 in pendientes) / len(pendientes)
-
-            posibles = [
-                (r + 1, c),
-                (r - 1, c),
-                (r, c + 1),
-                (r, c - 1),
-            ]
-
-            for nr, nc in posibles:
-
-                distancia_actual = (
-                    abs(r - objetivo_fila)
-                    + abs(c - objetivo_col)
-                )
-
-                nueva_distancia = (
-                    abs(nr - objetivo_fila)
-                    + abs(nc - objetivo_col)
-                )
-
-                if nueva_distancia <= distancia_actual:
-                    movimientos.append((nr, nc))
-
-        else:
-
-            movimientos = [
-                (r + 1, c),
-                (r - 1, c),
-                (r, c + 1),
-                (r, c - 1),
-            ]
-
-        for destino in movimientos:
-
-            nr, nc = destino
-
-            if (
-                self.min_fila <= nr <= self.max_fila
-                and self.min_col <= nc <= self.max_col
-                and bateria > 1
-            ):
-                acciones.append(("moverse", destino))
-
-        # =========================
-        # SOBREMARCHA
-        # =========================
-
-        movimientos_overdrive = []
-
-        posibles_overdrive = [
-            (r + 2, c),
-            (r - 2, c),
-            (r, c + 2),
-            (r, c - 2),
-        ]
-
-        for nr, nc in posibles_overdrive:
-
-            if pendientes:
-
-                distancia_actual = (
-                    abs(r - objetivo_fila)
-                    + abs(c - objetivo_col)
-                )
-
-                nueva_distancia = (
-                    abs(nr - objetivo_fila)
-                    + abs(nc - objetivo_col)
-                )
-
-                if nueva_distancia <= distancia_actual:
-                    movimientos_overdrive.append((nr, nc))
-
-            else:
-                movimientos_overdrive.append((nr, nc))
-
-        for destino in movimientos_overdrive:
-
-            nr, nc = destino
-
-            if (
-                self.min_fila <= nr <= self.max_fila
-                and self.min_col <= nc <= self.max_col
-                and bateria > 4
-            ):
-                acciones.append(("sobremarcha", destino))
-
-        # =========================
-        # EQUIPAR TALADRO
-        # =========================
-
-        if taladro != "termico" and bateria > 1:
-            acciones.append(("equipar", "termico"))
-
-        if taladro != "percusion" and bateria > 1:
-            acciones.append(("equipar", "percusion"))
-
-        # =========================
-        # RECOLECTAR
-        # =========================
-
-        if carga < 2:
-
-            if (
-                (r, c) in igneas
-                and taladro == "termico"
-                and bateria > 3
-            ):
-                acciones.append(("recolectar", "ignea"))
-
-            if (
-                (r, c) in sed
-                and taladro == "percusion"
-                and bateria > 3
-            ):
-                acciones.append(("recolectar", "sedimentaria"))
-
-        # =========================
-        # DEPOSITAR
-        # =========================
-
-        if carga > 0 and bateria > 1:
-
-            total_restantes = len(igneas) + len(sed)
-
-            if carga == 2 or (carga == 1 and total_restantes == 0):
-                acciones.append(("depositar", None))
-
-        # =========================
-        # RECARGAR
-        # =========================
-
-        if (
-            (r, c) not in self.zonas_sombra
-            and bateria < 20
-        ):
-            acciones.append(("recargar", None))
-
-        return acciones
-
-    def result(self, state, action):
-
-        (r, c), bateria, taladro, carga, igneas, sed = state
-
-        tipo, target = action
-
-        nueva_pos = (r, c)
-        nueva_bateria = bateria
-        nuevo_taladro = taladro
-        nueva_carga = carga
-
-        nuevas_igneas = list(igneas)
-        nuevas_sed = list(sed)
-
-        # =========================
-        # MOVERSE
-        # =========================
-
-        if tipo == "moverse":
-
-            nueva_pos = target
-            nueva_bateria -= 1
-
-        # =========================
-        # SOBREMARCHA
-        # =========================
-
-        elif tipo == "sobremarcha":
-
-            nueva_pos = target
-            nueva_bateria -= 4
-
-        # =========================
-        # EQUIPAR
-        # =========================
-
-        elif tipo == "equipar":
-
-            nuevo_taladro = target
-            nueva_bateria -= 1
-
-        # =========================
-        # RECOLECTAR
-        # =========================
-
-        elif tipo == "recolectar":
-
-            nueva_bateria -= 3
-            nueva_carga += 1
-
-            if target == "ignea":
-                nuevas_igneas.remove((r, c))
-
-            elif target == "sedimentaria":
-                nuevas_sed.remove((r, c))
-
-        # =========================
-        # DEPOSITAR
-        # =========================
-
-        elif tipo == "depositar":
-
-            nueva_bateria -= 1
-            nueva_carga = 0
-
-        # =========================
-        # RECARGAR
-        # =========================
-
-        elif tipo == "recargar":
-
-            nueva_bateria = min(20, bateria + 10)
-
-        return (
-            nueva_pos,
-            nueva_bateria,
-            nuevo_taladro,
-            nueva_carga,
-            tuple(nuevas_igneas),
-            tuple(nuevas_sed),
-        )
-
-    def cost(self, state, action, state2):
-
-        tipo, _ = action
-
-        if tipo == "moverse":
-            return 1
-
-        if tipo == "sobremarcha":
-            return 1
-
-        if tipo == "equipar":
-            return 3
-
-        if tipo == "recolectar":
-            return 2
-
-        if tipo == "depositar":
-
-            _, _, _, carga, _, _ = state
-            return carga
-
-        if tipo == "recargar":
-            return 4
-
-    def heuristic(self, state):
-
-        (r, c), _, _, carga, igneas, sed = state
-
-        pendientes = list(igneas) + list(sed)
-
-        if not pendientes:
-            return 0
-
-        distancias = [
-            abs(r - pr) + abs(c - pc)
-            for (pr, pc) in pendientes
-        ]
-
-        # distancia mínima a una muestra
-        minima = min(distancias)
-
-        # cada muestra todavía requiere:
-        # recolectar = 2 mins
-        # depositar = al menos 1 min cada 2 muestras
-        costo_muestras = len(pendientes) * 2
-
-        if carga > 0:
-            costo_muestras += 1
-
-        return minima + costo_muestras
-def planear_rover(
-    rover_inicio,
-    bateria_inicial,
-    zonas_sombra,
-    muestras_igneas,
-    muestras_sedimentarias,
-):
-
-    problema = RoverProblem(
-        rover_inicio,
-        bateria_inicial,
-        zonas_sombra,
-        muestras_igneas,
-        muestras_sedimentarias,
-    )
-
-    resultado = astar(problema)
-
-    if resultado is None:
-        return []
-
-    acciones = []
-
-    nodo = resultado
-
-    while nodo.parent is not None:
-
-        acciones.append(nodo.action)
-        nodo = nodo.parent
-
-    acciones.reverse()
-
-    return acciones
+from heapq import heappush, heappop
+import itertools
+
+
+def _manhattan(a, b):
+    return abs(a[0] - b[0]) + abs(a[1] - b[1])
+
+
+def _heuristic(pos, tool, load, ig, sd):
+    pending = list(ig) + list(sd)
+    if not pending:
+        return load
+
+    restantes = list(pending)
+    actual = pos
+    dist_total = 0
+    while restantes:
+        d, sig = min((_manhattan(actual, m), m) for m in restantes)
+        dist_total += d
+        actual = sig
+        restantes.remove(sig)
+
+    n = len(pending)
+    costo_equipar = 0 if tool is not None else 3
+    return dist_total // 2 + n * 2 + (n // 2) * 2 + (n % 2) + costo_equipar
+
+
+def planear_rover(rover_inicio, bateria_inicial, zonas_sombra,
+                  muestras_igneas, muestras_sedimentarias):
+
+    zonas_sombra = set(zonas_sombra)
+    ig0 = frozenset(muestras_igneas)
+    sd0 = frozenset(muestras_sedimentarias)
+
+    # Estado: (pos, bat, tool, load, ig, sd)
+    start = (tuple(rover_inicio), bateria_inicial, None, 0, ig0, sd0)
+
+    h0 = _heuristic(tuple(rover_inicio), None, 0, ig0, sd0)
+    counter = itertools.count()
+    # heap: (f, g, uid, state, path)
+    heap = [(h0, 0, next(counter), start, [])]
+    visited = {}
+
+    while heap:
+        f, g, _, state, path = heappop(heap)
+        pos, bat, tool, load, ig, sd = state
+
+        if state in visited:
+            continue
+        visited[state] = g
+
+        # goal
+        if not ig and not sd and load == 0:
+            return path
+
+        r, c = pos
+
+        # generar acciones
+        moves = []
+
+        if bat > 1:
+            for dr, dc in [(1, 0), (-1, 0), (0, 1), (0, -1)]:
+                moves.append(("moverse", (r + dr, c + dc)))
+
+        if bat > 4:
+            for dr, dc in [(2, 0), (-2, 0), (0, 2), (0, -2)]:
+                moves.append(("sobremarcha", (r + dr, c + dc)))
+
+        if bat > 1:
+            if pos in ig and tool != "termico":
+                moves.append(("equipar", "termico"))
+            if pos in sd and tool != "percusion":
+                moves.append(("equipar", "percusion"))
+
+        if bat > 3 and load < 2:
+            if pos in ig and tool == "termico":
+                moves.append(("recolectar", "ignea"))
+            if pos in sd and tool == "percusion":
+                moves.append(("recolectar", "sedimentaria"))
+
+        if bat > 1 and load > 0:
+            es_ultima = load == 1 and not ig and not sd
+            if load == 2 or es_ultima:
+                moves.append(("depositar", None))
+
+        if bat < 20 and pos not in zonas_sombra:
+            moves.append(("recargar", None))
+
+        for act, target in moves:
+            npos, nbat, ntool, nload, nig, nsd = pos, bat, tool, load, ig, sd
+
+            if act == "moverse":
+                npos = target
+                nbat -= 1
+                ng = g + 1
+            elif act == "sobremarcha":
+                npos = target
+                nbat -= 4
+                ng = g + 1
+            elif act == "equipar":
+                ntool = target
+                nbat -= 1
+                ng = g + 3
+            elif act == "recolectar":
+                nbat -= 3
+                nload += 1
+                if target == "ignea":
+                    nig = ig - {pos}
+                else:
+                    nsd = sd - {pos}
+                ng = g + 2
+            elif act == "depositar":
+                nbat -= 1
+                ng = g + load
+                nload = 0
+            elif act == "recargar":
+                nbat = min(20, bat + 10)
+                ng = g + 4
+
+            ns = (npos, nbat, ntool, nload, nig, nsd)
+            if ns not in visited:
+                nh = _heuristic(npos, ntool, nload, nig, nsd)
+                heappush(heap, (ng + nh, ng, next(counter), ns, path + [(act, target)]))
+
+    return []

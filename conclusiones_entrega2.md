@@ -1,0 +1,7 @@
+#  Conclusiones Entrega 2
+
+Para resolver el problema consultamos a Gemini (Google) y Claude (claude.ai). Los tres llegamos a la misma decisión central: modelar cada módulo como una variable del CSP identificada por (tipo, índice), filtrando el dominio desde el principio según el tipo de módulo siguiendo el patrón del ejemplo pallets_csp.py de la cátedra. A diferencia de la entrega anterior, acá no hubo bugs importantes que corregir: el problema está más acotado y las IAs llegaron a soluciones correctas bastante rápido.
+
+Las diferencias fueron principalmente de estilo. Nosotros usamos nombres en español y comentarios que explican qué restricción del enunciado se está implementando en cada parte. Las IAs produjeron código más compacto usando comprensiones de listas y un domain_map para unificar la asignación de dominios. En cuanto a la configuración del solver, los tres usamos backtrack con MOST_CONSTRAINED_VARIABLE, LEAST_CONSTRAINING_VALUE e inference=True, y coincidimos en los chequeos de imposibilidad temprana y el formato de salida.
+
+La lección principal es que para un problema bien definido como este, las IAs generan código correcto y funcional, pero sin explicar por qué se toman las decisiones de diseño. Conectar el código con la teoría del CSP fue algo que tuvimos que hacer nosotros.
