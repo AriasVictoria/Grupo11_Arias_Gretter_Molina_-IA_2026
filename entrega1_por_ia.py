@@ -1,10 +1,8 @@
 from simpleai.search import SearchProblem, astar
 
-
 class RoverProblem(SearchProblem):
     """
     Formulación del problema de navegación del rover Ares-1.
-    
     Estado: (posicion, bateria, taladro_activo, carga, muestras_igneas, muestras_sedimentarias)
     - posicion: tupla (fila, columna)
     - bateria: entero 1-20

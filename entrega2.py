@@ -1,4 +1,3 @@
-# coding: utf-8
 import itertools
 from simpleai.search import CspProblem, backtrack, MOST_CONSTRAINED_VARIABLE, LEAST_CONSTRAINING_VALUE
 
@@ -7,19 +6,25 @@ def build_camp(camp_size, habs, generators, labs, deposits, airlocks, craters):
     filas, columnas = camp_size
     crateres = set(craters)
 
-    # helpers para no repetir logica
     def es_borde(f, c):
         return f == 0 or f == filas - 1 or c == 0 or c == columnas - 1
 
     def son_adyacentes(p1, p2):
         return abs(p1[0] - p2[0]) + abs(p1[1] - p2[1]) == 1
 
-    # separo las celdas disponibles segun donde pueden ir los modulos
+    def tiene_vecino_libre(f, c):
+        # filtra celdas donde es imposible evacuar desde el principio
+        for df, dc in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
+            nf, nc = f + df, c + dc
+            if 0 <= nf < filas and 0 <= nc < columnas and (nf, nc) not in crateres:
+                return True
+        return False
+
     celdas_libres = [(f, c) for f in range(filas) for c in range(columnas) if (f, c) not in crateres]
     celdas_borde = [(f, c) for f, c in celdas_libres if es_borde(f, c)]
-    celdas_interior = [(f, c) for f, c in celdas_libres if not es_borde(f, c)]
+    # para habitacionales filtramos de entrada las que no tienen ninguna salida posible
+    celdas_interior = [(f, c) for f, c in celdas_libres if not es_borde(f, c) and tiene_vecino_libre(f, c)]
 
-    # casos imposibles antes de armar el csp
     if habs > 0 and not celdas_interior:
         return None
     if airlocks > 0 and not celdas_borde:
@@ -27,7 +32,6 @@ def build_camp(camp_size, habs, generators, labs, deposits, airlocks, craters):
     if labs > 0 and deposits == 0:
         return None
 
-    # cada modulo es una variable, identificada por tipo e indice
     variables = []
     for i in range(habs):
         variables.append(("hab", i))
@@ -43,21 +47,20 @@ def build_camp(camp_size, habs, generators, labs, deposits, airlocks, craters):
     if not variables:
         return []
 
-    # el dominio de cada variable son las celdas donde puede ir segun su tipo
-    # las restricciones unarias las resolvemos aca directamente
     dominios = {}
     for v in variables:
         if v[0] == "air":
-            dominios[v] = list(celdas_borde)      # esclusas solo en el borde
+            dominios[v] = list(celdas_borde)
         elif v[0] == "hab":
-            dominios[v] = list(celdas_interior)   # habitacionales solo adentro
+            dominios[v] = list(celdas_interior)
         else:
-            dominios[v] = list(celdas_libres)     # el resto en cualquier lado libre
+            dominios[v] = list(celdas_libres)
 
     habs_v = [v for v in variables if v[0] == "hab"]
     gens_v = [v for v in variables if v[0] == "gen"]
     labs_v = [v for v in variables if v[0] == "lab"]
     deps_v = [v for v in variables if v[0] == "dep"]
+    airs_v = [v for v in variables if v[0] == "air"]
 
     restricciones = []
 
@@ -67,6 +70,17 @@ def build_camp(camp_size, habs, generators, labs, deposits, airlocks, craters):
 
     for par in itertools.combinations(variables, 2):
         restricciones.append((par, distinto_lugar))
+
+    # ruptura de simetria: modulos del mismo tipo van en orden creciente de celda
+    # esto evita que el solver pruebe permutaciones equivalentes
+    orden_celda = {celda: idx for idx, celda in enumerate(celdas_libres)}
+
+    def en_orden(vars, vals):
+        return orden_celda.get(vals[0], 0) < orden_celda.get(vals[1], 0)
+
+    for grupo in [habs_v, gens_v, labs_v, deps_v, airs_v]:
+        for v1, v2 in zip(grupo, grupo[1:]):
+            restricciones.append(((v1, v2), en_orden))
 
     # generador no puede estar al lado de un habitacional ni de otro generador
     def no_adyacentes(vars, vals):
